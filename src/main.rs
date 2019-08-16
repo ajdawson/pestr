@@ -2,8 +2,8 @@
 extern crate clap;
 use std::env;
 use clap::{App, Arg};
-use pestr::{better_geometries, make_res, Geometry, Reservation};
-use serde_json::{json, to_string_pretty};
+use pestr::{Geometry, Reservation};
+use serde_json::json;
 
 macro_rules! get_arg {
     ($m:ident.value_of($v:expr), $t:ty) => {
@@ -13,6 +13,10 @@ macro_rules! get_arg {
         value_t!($m, $v, $t).unwrap_or_else(|e| e.exit())
     };
 }
+
+// ---------------------------------------------------------------------------
+// Functions for validating command line inputs.
+//
 
 fn positive_int_validator(val: String) -> Result<(), String> {
     match val.parse::<u32>() {
@@ -31,55 +35,49 @@ fn float_validator(val: String) -> Result<(), String> {
     }
 }
 
-fn print_reservation(res: Reservation) {
-    println!("{} nodes ({} CPU cores)", res.nodes, res.cpus);
-    if res.used_cpus != res.cpus {
-        println!("warning: reservation is not filled");
-        println!("  {} CPU cores in use", res.used_cpus);
-        println!(
-            "  {} CPU cores idle across {} nodes",
-            res.idle_cpus, res.partial_nodes
-        );
-    }
-}
+// ---------------------------------------------------------------------------
+// Reporter functions that report node usage/suggestions in a particular
+// format.
+//
 
-fn print_job(geom: Geometry, res: Reservation) {
-    println!(
-        "  {} x {} ({} nodes; {} CPU cores)",
-        geom.tasks, geom.threads, res.nodes, res.cpus
-    );
-}
-
+// Reporting in JSON format
 fn json_reporter(geom: Geometry, res: Reservation, alternates: Vec<(Geometry, Reservation)>) {
     fn jsonize_job(geom: Geometry, res: Reservation) -> serde_json::Value {
-        json!({
-            "pes": geom.tasks,
-            "threads": geom.threads,
-            "nodes": res.nodes,
-            "cpus": res.cpus,
-        })
+        json!({"geometry": geom, "reservation": res})
     }
-    let a_json: Vec<serde_json::Value> = alternates
-        .iter()
-        .map(|&(g, r)| jsonize_job(g, r))
-        .collect();
     let report = json!({
-        "cpus_per_node": geom.cpus_per_node,
-        "hyperthreading": geom.hyperthreading,
-        "pes": geom.tasks,
-        "threads": geom.threads,
-        "full_reservation": res.used_cpus == res.cpus,
-        "nodes": res.nodes,
-        "cpus": res.cpus,
-        "used_cpus": res.used_cpus,
-        "idle_cpus": res.idle_cpus,
-        "partial_nodes": res.partial_nodes,
-        "alternatives": a_json,
+        "geometry": geom,
+        "reservation": res,
+        "alternatives": alternates
+                        .iter()
+                        .map(|&(g, r)| jsonize_job(g, r))
+                        .collect::<Vec<serde_json::Value>>(),
     });
-    println!("{}", to_string_pretty(&report).unwrap());
+    println!("{}", serde_json::to_string_pretty(&report).unwrap());
 }
 
+// Reporting in human-readable plain text
 fn text_reporter(res: Reservation, alternates: Vec<(Geometry, Reservation)>) {
+
+    fn print_reservation(res: Reservation) {
+        println!("{} nodes ({} CPU cores)", res.nodes, res.cpus);
+        if res.used_cpus != res.cpus {
+            println!("warning: reservation is not filled");
+            println!("  {} CPU cores in use", res.used_cpus);
+            println!(
+                "  {} CPU cores idle across {} nodes",
+                res.idle_cpus, res.partial_nodes
+            );
+        }
+    }
+
+    fn print_job(geom: Geometry, res: Reservation) {
+        println!(
+            "  {} x {} ({} nodes; {} CPU cores)",
+            geom.tasks, geom.threads, res.nodes, res.cpus
+        );
+    }
+
     print_reservation(res);
     if alternates.len() > 0 {
         println!("alternate geometries that fill the reservation:");
@@ -89,6 +87,10 @@ fn text_reporter(res: Reservation, alternates: Vec<(Geometry, Reservation)>) {
     }
 }
 
+
+// The default value for CPUs per node is hard-coded, but can be overridden by
+// an environment variable named "PESTR_CORES_PER_NODE". This function provides
+// the correct value to the program.
 fn default_cpus_per_node() -> u32 {
     let hardcoded_default = 36;
     match env::var("PESTR_CORES_PER_NODE") {
@@ -101,8 +103,12 @@ fn default_cpus_per_node() -> u32 {
 }
 
 fn main() {
+    // Determine the default value for CPUS per node, which may be set by an
+    // environment variable `PESTR_CORES_PER_NODE`.
     let default_cpus_per_node_str: &str = &default_cpus_per_node().to_string();
-    let app = App::new("pestr")
+
+    // Define the command-line interface.
+    let matches = App::new("pestr")
         .version("1.0")
         .arg(
             Arg::with_name("PES")
@@ -161,9 +167,10 @@ fn main() {
             Arg::with_name("json_output")
                 .short("j")
                 .help("Write output as JSON"),
-        );
-    let matches = app.get_matches();
+        ).get_matches();
 
+    // Define a closure on `matches` that returns `true` if the flag is set or
+    // `false` otherwise.
     let get_flag = |name| -> bool {
         if matches.is_present(name) {
             true
@@ -172,16 +179,22 @@ fn main() {
         }
     };
 
-    
-    let geom = Geometry {
-        cpus_per_node: get_arg!(matches.value_of("cpus_per_node"), u32),
-        hyperthreading: get_flag("hyperthreading"),
-        tasks: get_arg!(matches.value_of("PES"), u32),
-        threads: get_arg!(matches.value_of("THREADS"), u32),
-    };
-    let res = make_res(geom);
+    // Construct the Geometry representing the user's job, and compute its reservation.
+    let geom = match Geometry::new(
+            get_arg!(matches.value_of("cpus_per_node"), u32),
+            get_flag("hyperthreading"),
+            get_arg!(matches.value_of("PES"), u32),
+            get_arg!(matches.value_of("THREADS"), u32),
+        ) {
+            Err(e) => { eprintln!("error: {}", e); std::process::exit(1) }
+            Ok(geometry) => geometry
+        };
+    let res = Reservation::from_geometry(geom);
 
-    let alternates = if res.cpus != res.used_cpus && get_flag("suggest_alternates") {
+    // Determine alternate geometries that yield a full reservation, within the
+    // specified parameters. Use an empty list if the user didn't ask for
+    // alternate geometries.
+    let alternates = if get_flag("suggest_alternates") {
         let task_radius = get_arg!(matches.value_of("pe_radius"), f32);
         let thread_radius = get_arg!(matches.value_of("thread_radius"), f32);
         let gr_filter = |_, r: Reservation| -> bool {
@@ -191,7 +204,7 @@ fn main() {
                 true
             }
         };
-        better_geometries(task_radius, thread_radius, &gr_filter, geom)
+        geom.alternates(task_radius, thread_radius, &gr_filter)
     } else {
         Vec::new()
     };
