@@ -1,5 +1,5 @@
-use std::fmt;
 use serde::Serialize;
+use std::fmt;
 
 // ---------------------------------------------------------------------------
 // Error handling for bad geometry sizes.
@@ -15,11 +15,7 @@ impl fmt::Display for GeometryError {
 
 impl fmt::Debug for GeometryError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "GeometryError {{ message: {} }}",
-            self.message
-        )
+        write!(f, "GeometryError {{ message: {} }}", self.message)
     }
 }
 
@@ -60,24 +56,33 @@ impl Geometry {
     ///     Ok(geom) => geom
     ///     Err(e) =};
     /// ```
-    pub fn new(cpus_per_node: u32, hyperthreading: bool, tasks: u32, threads:u32) -> Result<Geometry, GeometryError> {
+    pub fn new(
+        cpus_per_node: u32,
+        hyperthreading: bool,
+        tasks: u32,
+        threads: u32,
+    ) -> Result<Geometry, GeometryError> {
         let logical_cpus = cpus_per_node * if hyperthreading { 2 } else { 1 };
         if cpus_per_node <= 0 {
-            Err(GeometryError { message: String::from("CPUs per node must be > 0") } )
+            Err(GeometryError {
+                message: String::from("CPUs per node must be > 0"),
+            })
         } else if tasks <= 0 || threads <= 0 {
-            Err(GeometryError { message: String::from("tasks and threads must be > 0") } )
+            Err(GeometryError {
+                message: String::from("tasks and threads must be > 0"),
+            })
         } else if threads > logical_cpus {
-            Err(GeometryError { message: String::from("threads cannot be larger than the number of CPUs per node") } )
+            Err(GeometryError {
+                message: String::from("threads cannot be larger than the number of CPUs per node"),
+            })
         } else {
-            Ok(
-                Geometry {
-                    cpus_per_node,
-                    hyperthreading,
-                    logical_cpus,
-                    tasks,
-                    threads,
-                }
-            )
+            Ok(Geometry {
+                cpus_per_node,
+                hyperthreading,
+                logical_cpus,
+                tasks,
+                threads,
+            })
         }
     }
 
@@ -115,7 +120,12 @@ impl Geometry {
     /// let res = Reservation::from_geometry(geom);
     /// let alternates = geom.alternates(0.25, 0.5, &|_, r| { r.nodes == res.nodes });
     /// ```
-    pub fn alternates(self, task_radius: f32, thread_radius: f32, filter: &Fn(Geometry, Reservation) -> bool) -> Vec<(Geometry, Reservation)> {
+    pub fn alternates(
+        self,
+        task_radius: f32,
+        thread_radius: f32,
+        filter: &Fn(Geometry, Reservation) -> bool,
+    ) -> Vec<(Geometry, Reservation)> {
         let task_delta = (task_radius * (self.tasks as f32)) as i64;
         let thread_delta = (thread_radius * (self.threads as f32)) as i64;
         let mut alternates = Vec::new();

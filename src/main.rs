@@ -1,9 +1,9 @@
 #[macro_use]
 extern crate clap;
-use std::env;
 use clap::{App, Arg};
 use pestr::{Geometry, Reservation};
 use serde_json::json;
+use std::env;
 
 macro_rules! get_arg {
     ($m:ident.value_of($v:expr), $t:ty) => {
@@ -58,7 +58,6 @@ fn json_reporter(geom: Geometry, res: Reservation, alternates: Vec<(Geometry, Re
 
 // Reporting in human-readable plain text
 fn text_reporter(res: Reservation, alternates: Vec<(Geometry, Reservation)>) {
-
     fn print_reservation(res: Reservation) {
         println!("{} nodes ({} CPU cores)", res.nodes, res.cpus);
         if res.used_cpus != res.cpus {
@@ -87,7 +86,6 @@ fn text_reporter(res: Reservation, alternates: Vec<(Geometry, Reservation)>) {
     }
 }
 
-
 // The default value for CPUs per node is hard-coded, but can be overridden by
 // an environment variable named "PESTR_CORES_PER_NODE". This function provides
 // the correct value to the program.
@@ -97,8 +95,8 @@ fn default_cpus_per_node() -> u32 {
         Ok(val) => match val.parse::<u32>() {
             Ok(val) => val,
             Err(_) => hardcoded_default,
-        }
-        Err(_) => hardcoded_default
+        },
+        Err(_) => hardcoded_default,
     }
 }
 
@@ -167,7 +165,8 @@ fn main() {
             Arg::with_name("json_output")
                 .short("j")
                 .help("Write output as JSON"),
-        ).get_matches();
+        )
+        .get_matches();
 
     // Define a closure on `matches` that returns `true` if the flag is set or
     // `false` otherwise.
@@ -181,14 +180,17 @@ fn main() {
 
     // Construct the Geometry representing the user's job, and compute its reservation.
     let geom = match Geometry::new(
-            get_arg!(matches.value_of("cpus_per_node"), u32),
-            get_flag("hyperthreading"),
-            get_arg!(matches.value_of("PES"), u32),
-            get_arg!(matches.value_of("THREADS"), u32),
-        ) {
-            Err(e) => { eprintln!("error: {}", e); std::process::exit(1) }
-            Ok(geometry) => geometry
-        };
+        get_arg!(matches.value_of("cpus_per_node"), u32),
+        get_flag("hyperthreading"),
+        get_arg!(matches.value_of("PES"), u32),
+        get_arg!(matches.value_of("THREADS"), u32),
+    ) {
+        Err(e) => {
+            eprintln!("error: {}", e);
+            std::process::exit(1)
+        }
+        Ok(geometry) => geometry,
+    };
     let res = Reservation::from_geometry(geom);
 
     // Determine alternate geometries that yield a full reservation, within the
