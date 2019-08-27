@@ -5,15 +5,6 @@ use pestr::{Geometry, Reservation};
 use serde_json::json;
 use std::env;
 
-macro_rules! get_arg {
-    ($m:ident.value_of($v:expr), $t:ty) => {
-        get_arg!($m, $v, $t)
-    };
-    ($m:ident, $v:expr, $t:ty) => {
-        value_t!($m, $v, $t).unwrap_or_else(|e| e.exit())
-    };
-}
-
 // ---------------------------------------------------------------------------
 // Functions for validating command line inputs.
 //
@@ -100,13 +91,23 @@ fn default_cpus_per_node() -> u32 {
     }
 }
 
+// Extract the value of a command-line argument with a specified type.
+macro_rules! get_arg {
+    ($m:ident.value_of($v:expr), $t:ty) => {
+        get_arg!($m, $v, $t)
+    };
+    ($m:ident, $v:expr, $t:ty) => {
+        value_t!($m, $v, $t).unwrap_or_else(|e| e.exit())
+    };
+}
+
 fn main() {
     // Determine the default value for CPUS per node, which may be set by an
     // environment variable `PESTR_CORES_PER_NODE`.
     let default_cpus_per_node_str: &str = &default_cpus_per_node().to_string();
 
     // Define the command-line interface.
-    let matches = App::new("pestr")
+    let cli_app = App::new("pestr")
         .version("1.0")
         .arg(
             Arg::with_name("PES")
@@ -165,11 +166,12 @@ fn main() {
             Arg::with_name("json_output")
                 .short("j")
                 .help("Write output as JSON"),
-        )
-        .get_matches();
+        );
 
-    // Define a closure on `matches` that returns `true` if the flag is set or
-    // `false` otherwise.
+    // Construct a matches object which is the result of parsing the command-line
+    // options, and define a closure on `matches` that returns `true` if a flag is set
+    // or `false` otherwise.
+    let matches = cli_app.get_matches();
     let get_flag = |name| -> bool {
         if matches.is_present(name) {
             true
