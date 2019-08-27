@@ -158,11 +158,16 @@ impl Geometry {
 /// A reservation represents the resources required to run a job of a particular geometry.
 #[derive(Clone, Copy, Debug, Serialize)]
 pub struct Reservation {
+    /// The total number of nodes in the reservation.
     pub nodes: u32,
+    /// The total number of logical CPUs in the reservation.
     pub cpus: u32,
     is_filled: bool,
+    /// The number of logical CPUs that are active.
     pub used_cpus: u32,
+    /// The number of logical CPUs that are reserved but idle.
     pub idle_cpus: u32,
+    /// The number of nodes in the reservation that have 1 or more idle CPUs in them.
     pub partial_nodes: u32,
 }
 
