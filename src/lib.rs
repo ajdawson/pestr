@@ -63,11 +63,11 @@ impl Geometry {
         threads: u32,
     ) -> Result<Geometry, GeometryError> {
         let logical_cpus = cpus_per_node * if hyperthreading { 2 } else { 1 };
-        if cpus_per_node <= 0 {
+        if cpus_per_node == 0 {
             Err(GeometryError {
                 message: String::from("CPUs per node must be > 0"),
             })
-        } else if tasks <= 0 || threads <= 0 {
+        } else if tasks == 0 || threads == 0 {
             Err(GeometryError {
                 message: String::from("tasks and threads must be > 0"),
             })
@@ -124,7 +124,7 @@ impl Geometry {
         self,
         task_radius: f32,
         thread_radius: f32,
-        filter: &Fn(Geometry, Reservation) -> bool,
+        filter: &dyn Fn(Geometry, Reservation) -> bool,
     ) -> Vec<(Geometry, Reservation)> {
         let task_delta = (task_radius * (self.tasks as f32)) as i64;
         let thread_delta = (thread_radius * (self.threads as f32)) as i64;
@@ -147,7 +147,7 @@ impl Geometry {
             }
         }
         alternates.sort_by(|(_, a), (_, b)| a.nodes.cmp(&b.nodes));
-        return alternates;
+        alternates
     }
 
     fn with_tasks_and_threads(geom: Geometry, tasks: u32, threads: u32) -> Geometry {
@@ -214,9 +214,9 @@ impl Reservation {
                 nodes: reserved_nodes,
                 cpus: reserved_cpus,
                 is_filled: false,
-                used_cpus: used_cpus,
+                used_cpus,
                 idle_cpus: reserved_cpus - used_cpus,
-                partial_nodes: partial_nodes,
+                partial_nodes,
             }
         }
     }

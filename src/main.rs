@@ -69,7 +69,7 @@ fn text_reporter(res: Reservation, alternates: Vec<(Geometry, Reservation)>) {
     }
 
     print_reservation(res);
-    if alternates.len() > 0 {
+    if !alternates.is_empty() {
         println!("alternate geometries that fill the reservation:");
         for (g, r) in alternates {
             print_job(g, r);
@@ -172,13 +172,7 @@ fn main() {
     // options, and define a closure on `matches` that returns `true` if a flag is set
     // or `false` otherwise.
     let matches = cli_app.get_matches();
-    let get_flag = |name| -> bool {
-        if matches.is_present(name) {
-            true
-        } else {
-            false
-        }
-    };
+    let get_flag = |name| -> bool { matches.is_present(name) };
 
     // Construct the Geometry representing the user's job, and compute its reservation.
     let geom = match Geometry::new(
