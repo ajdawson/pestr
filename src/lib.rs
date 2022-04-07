@@ -53,8 +53,9 @@ impl Geometry {
     /// ```
     /// use pestr::Geometry;
     /// let geom = match Geometry::new(36, true, 24, 4) {
-    ///     Ok(geom) => geom
-    ///     Err(e) =};
+    ///     Ok(geom) => geom,
+    ///     Err(e) => panic!("failed to create geometry")
+    /// };
     /// ```
     pub fn new(
         cpus_per_node: u32,
