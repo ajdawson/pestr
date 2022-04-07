@@ -1,30 +1,25 @@
-#[macro_use]
-extern crate clap;
-use clap::{App, Arg};
-use pestr::{Geometry, Reservation};
+use clap::{crate_version, Parser};
 use serde_json::json;
 use std::env;
+
+use pestr::{Geometry, GeometryError, Reservation};
 
 // ---------------------------------------------------------------------------
 // Functions for validating command line inputs.
 //
 
-fn positive_int_validator(val: String) -> Result<(), String> {
-    match val.parse::<u32>() {
-        Ok(x) => match x {
-            0 => Err(String::from("must be > 0")),
-            _ => Ok(()),
-        },
-        Err(..) => Err(String::from("must be a positive integer")),
+fn positive_int(s: &str) -> Result<u32, String> {
+    let value: u32 = s
+        .parse()
+        .map_err(|_| format!("must be a positive integer"))?;
+    
+    if value == 0 {
+        Err(format!("must be a positive integer"))
+    } else {
+        Ok(value)
     }
 }
 
-fn float_validator(val: String) -> Result<(), String> {
-    match val.parse::<f32>() {
-        Ok(..) => Ok(()),
-        Err(..) => Err(String::from("must be a real number")),
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Reporter functions that report node usage/suggestions in a particular
@@ -91,112 +86,68 @@ fn default_cpus_per_node() -> u32 {
     }
 }
 
-// Extract the value of a command-line argument with a specified type.
-macro_rules! get_arg {
-    ($m:ident.value_of($v:expr), $t:ty) => {
-        get_arg!($m, $v, $t)
-    };
-    ($m:ident, $v:expr, $t:ty) => {
-        value_t!($m, $v, $t).unwrap_or_else(|e| e.exit())
-    };
+#[derive(Parser, Debug)]
+#[clap(version = crate_version!(), author = "Andrew Dawson <andrew.dawson@ecmwf.int>")]
+#[clap(about = "A PEs and threads calculator")]
+struct Args {
+    /// number of CPUs per node on the target machine
+    #[clap(short = 'n', long, parse(try_from_str=positive_int), default_value = "128")]
+    cpus_per_node: u32,
+
+    /// assume hyperthreading (doubles the effective CPUs per node)
+    #[clap(short = 'y', long)]
+    hyperthreading: bool,
+
+    /// suggest alternative geometries that fill whole nodes
+    #[clap(short, long)]
+    suggest: bool,
+
+    /// suggestions should conserve the total number of nodes used
+    #[clap(short, long)]
+    conserve_node_count: bool,
+
+    /// blah?
+    #[clap(short, long, default_value = "0.5")]
+    pe_radius: f32,
+
+    /// huh?
+    #[clap(short, long, default_value = "0.25")]
+    thread_radius: f32,
+
+    /// output in JSON format
+    #[clap(short, long)]
+    json_output: bool,
+
+    /// number of PEs (MPI tasks) allocated to the job
+    #[clap(parse(try_from_str=positive_int))]
+    pes: u32,
+
+    /// number of threads allocated to the job
+    #[clap(parse(try_from_str=positive_int))]
+    threads: u32,
 }
 
-fn main() {
-    // Determine the default value for CPUS per node, which may be set by an
-    // environment variable `PESTR_CORES_PER_NODE`.
-    let default_cpus_per_node_str: &str = &default_cpus_per_node().to_string();
-
-    // Define the command-line interface.
-    let cli_app = App::new("pestr")
-        .version("1.0")
-        .arg(
-            Arg::with_name("PES")
-                .help("Number of PEs (MPI tasks) allocated to the job")
-                .validator(positive_int_validator)
-                .required(true)
-                .index(1),
-        )
-        .arg(
-            Arg::with_name("THREADS")
-                .help("Number of threads per PE")
-                .validator(positive_int_validator)
-                .required(true)
-                .index(2),
-        )
-        .arg(
-            Arg::with_name("cpus_per_node")
-                .short("n")
-                .help("Number of CPUs per node on the target machine")
-                .validator(positive_int_validator)
-                .default_value(default_cpus_per_node_str)
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("hyperthreading")
-                .short("y")
-                .help("Enable hyperthreading (double the node CPU count)"),
-        )
-        .arg(
-            Arg::with_name("suggest_alternates")
-                .short("s")
-                .help("Suggest alternate geometries that fill their reservation"),
-        )
-        .arg(
-            Arg::with_name("conserve_node_count")
-                .short("c")
-                .help("Conserve total node count in suggested geometries"),
-        )
-        .arg(
-            Arg::with_name("pe_radius")
-                .short("p")
-                .help("blah")
-                .validator(float_validator)
-                .default_value("0.25")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("thread_radius")
-                .short("t")
-                .help("blah")
-                .validator(float_validator)
-                .default_value("0.5")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("json_output")
-                .short("j")
-                .help("Write output as JSON"),
-        );
-
-    // Construct a matches object which is the result of parsing the command-line
-    // options, and define a closure on `matches` that returns `true` if a flag is set
-    // or `false` otherwise.
-    let matches = cli_app.get_matches();
-    let get_flag = |name| -> bool { matches.is_present(name) };
+fn main() -> Result<(), String> {
+    let opts: Args = Args::parse();
 
     // Construct the Geometry representing the user's job, and compute its reservation.
-    let geom = match Geometry::new(
-        get_arg!(matches.value_of("cpus_per_node"), u32),
-        get_flag("hyperthreading"),
-        get_arg!(matches.value_of("PES"), u32),
-        get_arg!(matches.value_of("THREADS"), u32),
-    ) {
-        Err(e) => {
-            eprintln!("error: {}", e);
-            std::process::exit(1)
-        }
-        Ok(geometry) => geometry,
-    };
+    let geom = Geometry::new(
+        opts.cpus_per_node,
+        opts.hyperthreading,
+        opts.pes,
+        opts.threads,
+    ).map_err(|e| format!("{}", e))?;
+
     let res = Reservation::from_geometry(geom);
 
     // Determine alternate geometries that yield a full reservation, within the
     // specified parameters. Use an empty list if the user didn't ask for
     // alternate geometries.
-    let alternates = if get_flag("suggest_alternates") {
-        let task_radius = get_arg!(matches.value_of("pe_radius"), f32);
-        let thread_radius = get_arg!(matches.value_of("thread_radius"), f32);
+    let alternates = if opts.suggest {
+        let task_radius = opts.pe_radius;
+        let thread_radius = opts.thread_radius;
         let gr_filter = |_, r: Reservation| -> bool {
-            if get_flag("conserve_node_count") {
+            if opts.conserve_node_count {
                 r.nodes == res.nodes
             } else {
                 true
@@ -207,9 +158,10 @@ fn main() {
         Vec::new()
     };
 
-    if get_flag("json_output") {
+    if opts.json_output {
         json_reporter(geom, res, alternates);
     } else {
         text_reporter(res, alternates)
     }
+    Ok(())
 }
