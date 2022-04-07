@@ -81,7 +81,7 @@ fn text_reporter(res: Reservation, alternates: Vec<(Geometry, Reservation)>) {
 // an environment variable named "PESTR_CORES_PER_NODE". This function provides
 // the correct value to the program.
 fn default_cpus_per_node() -> u32 {
-    let hardcoded_default = 36;
+    let hardcoded_default = 128;
     match env::var("PESTR_CORES_PER_NODE") {
         Ok(val) => match val.parse::<u32>() {
             Ok(val) => val,
