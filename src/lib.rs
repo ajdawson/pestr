@@ -131,16 +131,16 @@ impl Geometry {
         let thread_delta = (thread_radius * (self.threads as f32)) as i64;
         let mut alternates = Vec::new();
         for task_p in -task_delta..=task_delta {
-            let tasks = ((self.tasks as i64) + task_p) as u32;
+            let tasks = (self.tasks as i64) + task_p;
             if tasks < 1 {
                 continue;
             }
             for thread_p in -thread_delta..=thread_delta {
-                let threads = ((self.threads as i64) + thread_p) as u32;
-                if threads < 1 || threads > self.logical_cpus {
+                let threads = (self.threads as i64) + thread_p;
+                if threads < 1 || threads > self.logical_cpus as i64 {
                     continue;
                 }
-                let geom = Geometry::with_tasks_and_threads(self, tasks, threads);
+                let geom = Geometry::with_tasks_and_threads(self, tasks as u32, threads as u32);
                 let res = Reservation::from_geometry(geom);
                 if res.is_filled && filter(geom, res) {
                     alternates.push((geom, res));
