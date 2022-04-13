@@ -1,8 +1,6 @@
 use regex::Regex;
 
-const DEFAULT_SEARCH_CONSERVE_NODES: bool = false;
-const DEFAULT_SEARCH_PE_RADIUS: f32 = 0.25;
-const DEFAULT_SEARCH_THREAD_RADIUS: f32 = 0.5;
+use crate::config::SearchConfig;
 
 #[derive(Debug)]
 pub struct SearchOptions {
@@ -11,24 +9,22 @@ pub struct SearchOptions {
     pub thread_radius: f32,
 }
 
-impl Default for SearchOptions {
-    fn default() -> Self {
+impl SearchOptions {
+    pub fn default(search_config: SearchConfig) -> Self {
         Self {
-            conserve_nodes: DEFAULT_SEARCH_CONSERVE_NODES,
-            pe_radius: DEFAULT_SEARCH_PE_RADIUS,
-            thread_radius: DEFAULT_SEARCH_THREAD_RADIUS,
+            conserve_nodes: search_config.conserve_nodes,
+            pe_radius: search_config.pe_radius,
+            thread_radius: search_config.thread_radius,
         }
     }
-}
 
-impl SearchOptions {
-    pub fn parse(s: &str) -> Result<Self, String> {
+    pub fn parse(s: &str, search_config: SearchConfig) -> Result<Self, String> {
         let pe_radius_matcher = FloatOption::new("pe_radius");
         let thread_radius_matcher = FloatOption::new("thread_radius");
 
-        let mut conserve_nodes = DEFAULT_SEARCH_CONSERVE_NODES;
-        let mut pe_radius = DEFAULT_SEARCH_PE_RADIUS;
-        let mut thread_radius = DEFAULT_SEARCH_THREAD_RADIUS;
+        let mut conserve_nodes = search_config.conserve_nodes;
+        let mut pe_radius = search_config.pe_radius;
+        let mut thread_radius = search_config.thread_radius;
 
         for opt in s.split(',') {
             if opt == "conserve_nodes" {

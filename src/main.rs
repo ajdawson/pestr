@@ -1,20 +1,22 @@
 use clap::{crate_version, Parser};
 
+mod config;
 mod report;
 mod searchopts;
 
+use crate::config::Config;
 use crate::searchopts::SearchOptions;
 use pestr::{Geometry, Reservation};
 
-const DEFAULT_CPUS_PER_NODE: u32 = 128;
+static CONFIG_FILE_NAME: &str = ".pestr.toml";
 
 #[derive(Parser, Debug)]
 #[clap(version = crate_version!(), author = "Andrew Dawson <andrew.dawson@ecmwf.int>")]
 #[clap(about = "A PEs and threads calculator")]
 struct Args {
     /// number of CPUs per node on the target machine
-    #[clap(short = 'n', long, parse(try_from_str=positive_int), default_value_t = DEFAULT_CPUS_PER_NODE)]
-    cpus_per_node: u32,
+    #[clap(short = 'n', long, parse(try_from_str=positive_int))]
+    cpus_per_node: Option<u32>,
 
     /// assume hyperthreading (doubles the effective CPUs per node)
     #[clap(short = 'y', long)]
@@ -24,9 +26,14 @@ struct Args {
     #[clap(short, long)]
     search: Option<Option<String>>,
 
+    // FIXME: could use an enum here to get a particular formatter type...
     /// output in JSON format
     #[clap(short, long)]
     json_output: bool,
+
+    /// configuration file path
+    #[clap(short, long)]
+    config_file: Option<String>,
 
     /// number of PEs (MPI tasks) allocated to the job
     #[clap(parse(try_from_str=positive_int))]
@@ -38,28 +45,37 @@ struct Args {
 }
 
 fn main() -> Result<(), String> {
-    let opts: Args = Args::parse();
+    let args: Args = Args::parse();
+    let config_file = match args.config_file {
+        Some(config_file_path) => Some(shellexpand::tilde(&config_file_path).into_owned()),
+        None => match dirs::home_dir() {
+            Some(home) => home.join(CONFIG_FILE_NAME).to_str().map(|s| s.to_owned()),
+            None => None,
+        },
+    };
+
+    let config = match &config_file {
+        Some(c) => Config::from_file(c),
+        None => Config::new(),
+    };
+
+    let cpus_per_node = args.cpus_per_node.unwrap_or(config.cpus_per_node);
 
     // Construct the Geometry representing the user's job, and compute its reservation.
-    let geom = Geometry::new(
-        opts.cpus_per_node,
-        opts.hyperthreading,
-        opts.pes,
-        opts.threads,
-    )
-    .map_err(|e| format!("{}", e))?;
+    let geom = Geometry::new(cpus_per_node, args.hyperthreading, args.pes, args.threads)
+        .map_err(|e| format!("{}", e))?;
 
     let res = Reservation::from_geometry(geom);
 
     // Determine alternate geometries that yield a full reservation, within the
     // specified parameters. Use an empty list if the user didn't ask for
     // alternate geometries.
-    let alternates = match opts.search {
+    let alternates = match args.search {
         None => Vec::new(),
         Some(search_option_str) => {
             let search_options = match search_option_str {
-                None => SearchOptions::default(),
-                Some(s) => SearchOptions::parse(&s)?,
+                None => SearchOptions::default(config.search), // FIXME: here we need to inject from our config
+                Some(s) => SearchOptions::parse(&s, config.search)?, // FIXME: also here might need to know
             };
 
             let gr_filter = |_, r: Reservation| -> bool {
@@ -77,7 +93,7 @@ fn main() -> Result<(), String> {
         }
     };
 
-    if opts.json_output {
+    if args.json_output {
         report::json_reporter(geom, res, alternates);
     } else {
         report::text_reporter(res, alternates)
@@ -96,17 +112,3 @@ fn positive_int(s: &str) -> Result<u32, String> {
             }
         })
 }
-
-// The default value for CPUs per node is hard-coded, but can be overridden by
-// an environment variable named "PESTR_CORES_PER_NODE". This function provides
-// the correct value to the program.
-// fn default_cpus_per_node() -> u32 {
-//     let hardcoded_default = 128;
-//     match env::var("PESTR_CORES_PER_NODE") {
-//         Ok(val) => match val.parse::<u32>() {
-//             Ok(val) => val,
-//             Err(_) => hardcoded_default,
-//         },
-//         Err(_) => hardcoded_default,
-//     }
-// }
