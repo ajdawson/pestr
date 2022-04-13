@@ -1,4 +1,4 @@
-use clap::{crate_version, Parser};
+use clap::{crate_version, ArgEnum, Parser};
 
 mod config;
 mod report;
@@ -26,10 +26,9 @@ struct Args {
     #[clap(short, long)]
     search: Option<Option<String>>,
 
-    // FIXME: could use an enum here to get a particular formatter type...
-    /// output in JSON format
-    #[clap(short, long)]
-    json_output: bool,
+    // output format selection
+    #[clap(arg_enum, short, long, default_value_t=Reporter::Text)]
+    report_format: Reporter,
 
     /// configuration file path
     #[clap(short, long)]
@@ -93,12 +92,17 @@ fn main() -> Result<(), String> {
         }
     };
 
-    if args.json_output {
-        report::json_reporter(geom, res, alternates);
-    } else {
-        report::text_reporter(res, alternates)
+    match args.report_format {
+        Reporter::Text => report::text_reporter(res, alternates),
+        Reporter::Json => report::json_reporter(geom, res, alternates),
     }
     Ok(())
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+enum Reporter {
+    Json,
+    Text,
 }
 
 fn positive_int(s: &str) -> Result<u32, String> {
