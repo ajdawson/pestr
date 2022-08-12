@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    name: Build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        build: [linux, macos, macos-m1, win-msvc, win-gnu]
+        include:
+          - build: linux
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            extension: ""
+          - build: macos
+            os: macos-latest
+            target: x86_64-apple-darwin
+            extension: ""
+          - build: macos-m1
+            os: macos-latest
+            target: aarch64-apple-darwin
+            extension: ""
+          - build: win-msvc
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            extension: ".exe"
+          - build: win-gnu
+            os: windows-latest
+            target: x86_64-pc-windows-gnu
+            extension: ".exe"
+    env:
+      TARGET_PATH: target/${{ matrix.target }}/release
+    steps:
+      - name: Set an environment variable containing the full release name
+        shell: bash
+        run: |
+          echo "TARGET_NAME=pestr-${GITHUB_REF#refs/tags/v}-${{ matrix.target }}${{ matrix.extension }}" >> $GITHUB_ENV
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          target: ${{ matrix.target }}
+      - name: Build the release binary
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --verbose --release --target ${{ matrix.target }}
+      - name: Strip release binary
+        if: matrix.build == 'linux' || matrix.build == 'macos'
+        run: strip "${TARGET_PATH}/pestr${{ matrix.extension }}"
+      - name: Rename the release binary
+        shell: bash
+        run: mv "${TARGET_PATH}/pestr${{ matrix.extension }}" "${TARGET_PATH}/${TARGET_NAME}"
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: pestr-${{ matrix.build }}
+          path: ${{ env.TARGET_PATH }}/${{ env.TARGET_NAME }}
+          retention-days: 1
+          if-no-files-found: error
+
+  release:
+    name: Create a new Github release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v2
+      - name: Collect artifacts
+        run: mkdir releases && find * -type f -name "pestr-*" -exec sh -c 'mv {} releases/$( basename {} )' \;
+      - name: Create a release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            releases/*
