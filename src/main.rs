@@ -14,31 +14,51 @@ static CONFIG_FILE_NAME: &str = ".pestr.toml";
 #[clap(version = crate_version!(), author = "Andrew Dawson <andrew.dawson@ecmwf.int>")]
 #[clap(about = "A PEs and threads calculator")]
 struct Args {
-    /// number of CPUs per node on the target machine
+    /// The number of physical CPUs per node on the target architecture
     #[clap(short = 'n', long, parse(try_from_str=positive_int))]
     cpus_per_node: Option<u32>,
 
-    /// assume hyperthreading (doubles the effective CPUs per node)
+    /// Assume hyperthreading (doubles the effective CPUs per node)
     #[clap(short = 'y', long)]
     hyperthreading: bool,
 
-    /// suggest alternative geometries that fill whole nodes
+    /// Suggest alternative geometries that fill whole nodes, the option
+    /// can be specified on its own, or with an argument. On its own it
+    /// will perform a search within parameters from the configuration
+    /// file, or using default parameters if no configuration file exists.
+    /// If an argument is given it can be a comma-separated config values
+    /// where the following are allowed: pe_radius=FLOAT, thread_radius=FLOAT,
+    /// conserve_nodes.
+    ///
+    /// The values for pe_radius and thread_radius are floating point numbers
+    /// indicating the search radius allowed for PEs and threads respectively,
+    /// as a fraction of their given values. The conserve_nodes flag indicates
+    /// that you require all suggested geometries to use the same number of
+    /// nodes as the input geometry.
     #[clap(short, long)]
     search: Option<Option<String>>,
 
-    // output format selection
+    /// Output format selection
     #[clap(arg_enum, short, long, default_value_t=Reporter::Text)]
     report_format: Reporter,
 
-    /// configuration file path
+    /// Path to a configuration file.
+    ///
+    /// The file should be im TOML format and may contain a top-level key
+    /// 'cpus_per_node' indicating the number of physical CPUs per node on
+    /// the target architecture, and a section 'search' that may contain
+    /// keys 'pe_radius', 'thread_radius' and 'conserve_nodes', see the
+    /// documentation for the --search option for details. Values given on
+    /// the command line will supercede those from the config file.
+    /// By default the configuration is expected in ~/.pestr.toml.
     #[clap(short, long)]
     config_file: Option<String>,
 
-    /// number of PEs (MPI tasks) allocated to the job
+    /// Number of PEs (MPI tasks) allocated to the job
     #[clap(parse(try_from_str=positive_int))]
     pes: u32,
 
-    /// number of threads allocated to the job
+    /// Number of threads allocated to the job
     #[clap(parse(try_from_str=positive_int))]
     threads: u32,
 }
