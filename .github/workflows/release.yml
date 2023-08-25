@@ -12,28 +12,28 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        build: [linux, macos, macos-m1, win-msvc, win-gnu]
+        build: [linux, macos-aarch64]
         include:
           - build: linux
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             extension: ""
-          - build: macos
-            os: macos-latest
-            target: x86_64-apple-darwin
-            extension: ""
-          - build: macos-m1
+          # - build: macos
+          #   os: macos-latest
+          #   target: x86_64-apple-darwin
+          #   extension: ""
+          - build: macos-aarch64
             os: macos-latest
             target: aarch64-apple-darwin
             extension: ""
-          - build: win-msvc
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
-            extension: ".exe"
-          - build: win-gnu
-            os: windows-latest
-            target: x86_64-pc-windows-gnu
-            extension: ".exe"
+          # - build: win-msvc
+          #   os: windows-latest
+          #   target: x86_64-pc-windows-msvc
+          #   extension: ".exe"
+          # - build: win-gnu
+          #   os: windows-latest
+          #   target: x86_64-pc-windows-gnu
+          #   extension: ".exe"
     env:
       TARGET_PATH: target/${{ matrix.target }}/release
     steps:
@@ -42,26 +42,21 @@ jobs:
         run: |
           echo "TARGET_NAME=pestr-${GITHUB_REF#refs/tags/v}-${{ matrix.target }}${{ matrix.extension }}" >> $GITHUB_ENV
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Setup Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          override: true
           target: ${{ matrix.target }}
       - name: Build the release binary
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --verbose --release --target ${{ matrix.target }}
+        run: cargo build --verbose --release --target ${{ matrix.target }}
       - name: Strip release binary
-        if: matrix.build == 'linux' || matrix.build == 'macos'
+        if: matrix.build == 'linux' || matrix.build == 'macos' || matrix.build == 'macos-aarch64'
         run: strip "${TARGET_PATH}/pestr${{ matrix.extension }}"
       - name: Rename the release binary
         shell: bash
         run: mv "${TARGET_PATH}/pestr${{ matrix.extension }}" "${TARGET_PATH}/${TARGET_NAME}"
       - name: Upload build artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: pestr-${{ matrix.build }}
           path: ${{ env.TARGET_PATH }}/${{ env.TARGET_NAME }}
@@ -74,7 +69,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download build artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
       - name: Collect artifacts
         run: mkdir releases && find * -type f -name "pestr-*" -exec sh -c 'mv {} releases/$( basename {} )' \;
       - name: Create a release
