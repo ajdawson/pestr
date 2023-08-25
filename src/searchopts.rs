@@ -56,7 +56,7 @@ impl FloatOption {
             regex: Regex::new(&format!(
                 "^{}={}$",
                 regex::escape(option_name),
-                r#"(?P<value>[0-9]*\.?[0-9]+)"#
+                r"(?P<value>[0-9]*\.?[0-9]+)"
             ))
             .unwrap(),
         }
