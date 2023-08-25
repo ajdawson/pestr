@@ -1,4 +1,4 @@
-use clap::{crate_version, ArgEnum, Parser};
+use clap::{builder::PossibleValue, crate_version, value_parser, Parser, ValueEnum};
 
 mod config;
 mod report;
@@ -15,7 +15,7 @@ static CONFIG_FILE_NAME: &str = ".pestr.toml";
 #[clap(about = "A PEs and threads calculator")]
 struct Args {
     /// The number of physical CPUs per node on the target architecture
-    #[clap(short = 'n', long, parse(try_from_str=positive_int))]
+    #[clap(short = 'n', long, value_parser=value_parser!(u32).range(1..))]
     cpus_per_node: Option<u32>,
 
     /// Assume hyperthreading (doubles the effective CPUs per node)
@@ -39,7 +39,7 @@ struct Args {
     search: Option<Option<String>>,
 
     /// Output format selection
-    #[clap(arg_enum, short, long, default_value_t=Reporter::Text)]
+    #[clap(value_enum, short, long, default_value_t=Reporter::Text)]
     report_format: Reporter,
 
     /// Path to a configuration file.
@@ -55,11 +55,11 @@ struct Args {
     config_file: Option<String>,
 
     /// Number of PEs (MPI tasks) allocated to the job
-    #[clap(parse(try_from_str=positive_int))]
+    #[clap(value_parser=value_parser!(u32).range(1..))]
     pes: u32,
 
     /// Number of threads allocated to the job
-    #[clap(parse(try_from_str=positive_int))]
+    #[clap(value_parser=value_parser!(u32).range(1..))]
     threads: u32,
 }
 
@@ -119,20 +119,21 @@ fn main() -> Result<(), String> {
     Ok(())
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Reporter {
     Json,
     Text,
 }
 
-fn positive_int(s: &str) -> Result<u32, String> {
-    s.parse()
-        .map_err(|_| String::from("must be a positive integer"))
-        .and_then(|value| {
-            if value == 0 {
-                Err(String::from("must be > 0"))
-            } else {
-                Ok(value)
-            }
+impl ValueEnum for Reporter {
+    fn value_variants<'a>() -> &'a [Self] {
+        &[Self::Json, Self::Text]
+    }
+
+    fn to_possible_value(&self) -> Option<clap::builder::PossibleValue> {
+        Some(match self {
+            Self::Json => PossibleValue::new("json"),
+            Self::Text => PossibleValue::new("text"),
         })
+    }
 }
